@@ -1,0 +1,10 @@
+# Emacs:
+*~
+
+# Python:
+.eggs
+.coverage
+__pycache__
+.pytest_cache
+*.egg-info
+*.pyc
