@@ -35,12 +35,16 @@ class ChunkParser:
                     in_chunk = True
                     chunk_name = match.group('chunk_name')
                     chunk = []
-                    self.deps[chunk_name] = set()
+                    if chunk_name not in self:
+                        self.deps[chunk_name] = set()
             else:
                 if line == '@':
                     in_chunk = False
-                    self.chunks[chunk_name] = chunk
-                    chunk = ''
+                    if chunk_name in self:
+                        self.chunks[chunk_name].extend(chunk)
+                    else:
+                        self.chunks[chunk_name] = chunk
+                    chunk = []
                     chunk_name = ''
                 else:
                     included_chunks = include_chunk_matcher.findall(line)

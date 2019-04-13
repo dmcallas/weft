@@ -151,5 +151,19 @@ bar
     except RecursionError:
         pass
         
-
+def test_append_to_chunk():
+    test_string = """
+<<test1>>=
+foo
+@
+<<test2>>=
+baz
+@
+<<test1>>=
+bar
+@
+    """
+    chunks = ChunkParser(test_string)
+    assert chunks["test1"] == "foo\nbar\n"
+    assert chunks["test2"] == "baz\n"
 
