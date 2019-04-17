@@ -38,7 +38,7 @@ class ChunkParser:
                     if chunk_name not in self:
                         self.deps[chunk_name] = set()
             else:
-                if line == '@':
+                if line == '@' or line.startswith('@ '):
                     in_chunk = False
                     if chunk_name in self:
                         self.chunks[chunk_name].extend(chunk)

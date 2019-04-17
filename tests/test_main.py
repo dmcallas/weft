@@ -35,6 +35,19 @@ qwerty
     assert "test2" not in chunks
     assert "test2" not in chunks.get_chunk_names()
 
+def test_def_after_at_in_end_of_chunk():
+    test_string = """
+<<test1>>=
+asdf
+qwerty
+ zxcv
+@ %def asdf
+    """
+    chunks = ChunkParser(test_string)
+    assert "test1" in chunks
+    assert chunks["test1"] == "asdf\nqwerty\n zxcv\n"
+    assert "test2" not in chunks
+
 
 def test_with_at_in_chunk():
     test_string = """
