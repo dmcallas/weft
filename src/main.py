@@ -86,10 +86,12 @@ class ChunkParser:
     def __getitem__(self, key: str):
         return self.fetch_chunk(key)
 
-
-if __name__ == '__main__':
+def tangle_file(file_name):
     file_str = file_to_string(sys.argv[1])
     chunks = ChunkParser(file_str)
     for chunk in chunks.get_chunk_names():
         if chunk.startswith('file:'):
             write_to_file(chunk[5:],chunks[chunk])
+
+if __name__ == '__main__':
+    tangle_file(sys.argv[1])
