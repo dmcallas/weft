@@ -2,14 +2,15 @@ import re
 import os
 import sys
 
+
 def file_to_string(file_name):
-    with open(file_name, 'r') as f:
+    with open(file_name, "r") as f:
         data = f.read()
     return data
 
 
 def write_to_file(file_name, content):
-    with open(file_name, 'w') as f:
+    with open(file_name, "w") as f:
         f.write(content)
 
 
@@ -19,11 +20,10 @@ class ChunkParser:
         self._extract_chunks(text)
         self._nl = linesep
 
-
     def _extract_chunks(self, input_text: str):
         in_chunk = False
-        chunk_name = ''
-        chunk = ''
+        chunk_name = ""
+        chunk = ""
         self.chunks = dict()
         self.deps = dict()
         matcher = re.compile(r"<<(?P<chunk_name>.*)>>=")
@@ -33,19 +33,19 @@ class ChunkParser:
                 match = matcher.match(line)
                 if match:
                     in_chunk = True
-                    chunk_name = match.group('chunk_name')
+                    chunk_name = match.group("chunk_name")
                     chunk = []
                     if chunk_name not in self:
                         self.deps[chunk_name] = set()
             else:
-                if line == '@' or line.startswith('@ '):
+                if line == "@" or line.startswith("@ "):
                     in_chunk = False
                     if chunk_name in self:
                         self.chunks[chunk_name].extend(chunk)
                     else:
                         self.chunks[chunk_name] = chunk
                     chunk = []
-                    chunk_name = ''
+                    chunk_name = ""
                 else:
                     included_chunks = include_chunk_matcher.findall(line)
                     self.deps[chunk_name].update(included_chunks)
@@ -61,7 +61,7 @@ class ChunkParser:
         return item in self.chunks
 
     def fetch_chunk_lines(self, chunk_name: str):
-        chunk_lines = self.chunks.get(chunk_name,"")
+        chunk_lines = self.chunks.get(chunk_name, "")
         processed_lines = []
         for line in chunk_lines:
             processed = False
@@ -78,20 +78,21 @@ class ChunkParser:
                 processed_lines.append(line)
         return processed_lines
 
-
     def fetch_chunk(self, chunk_name: str):
         chunk_lines = self.fetch_chunk_lines(chunk_name)
-        return self._nl.join(chunk_lines)+self._nl
+        return self._nl.join(chunk_lines) + self._nl
 
     def __getitem__(self, key: str):
         return self.fetch_chunk(key)
 
+
 def tangle_file(file_name):
-    file_str = file_to_string(sys.argv[1])
+    file_str = file_to_string(file_name)
     chunks = ChunkParser(file_str)
     for chunk in chunks.get_chunk_names():
-        if chunk.startswith('file:'):
-            write_to_file(chunk[5:],chunks[chunk])
+        if chunk.startswith("file:"):
+            write_to_file(chunk[5:], chunks[chunk])
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     tangle_file(sys.argv[1])
