@@ -1,0 +1,248 @@
+\section{Basic project configuration}
+
+\subsection{Skeleton of {\t setup.py}}
+
+<<file:setup.py>>=
+<<setup.py imports>>
+
+<<Weft setup.py command>>
+
+<<setup.py config>>
+@
+
+
+First, we need imports for the command as well as standard {\t setup.py} imports.
+
+<<setup.py imports>>=
+import distutils.cmd
+import distutils.log
+from setuptools import setup
+from src import main
+import glob, os
+@
+
+
+Now to run the {\t weft} command from {\t setup.py}, we need to have a command class:
+
+<<Weft setup.py command>>=
+class WeftCommand(distutils.cmd.Command):
+    "Custom command to tangle noweb files to source."
+
+    description = 'Run tangle to generate source from noweb files'
+    user_options = [
+        ('weft-path=', None, 'Path to noweb files'),
+    ]
+
+    def initialize_options(self):
+      """Set default values for options."""
+      # Each user option must be listed here with their default value.
+      self.weft_path = ''
+
+    def finalize_options(self):
+        """Post-process options."""
+        if self.weft_path:
+            assert os.path.exists(self.weft_path), f'Weft path {self.weft_path} does not exist.'
+
+    def run(self):
+        self.announce("Tangling file", level=distutils.log.INFO)
+        if self.weft_path:
+          os.chdir(self.weft_path)
+        for file in glob.glob("*.nw"):
+            main.tangle_file(file)
+@
+
+Finally, the standard metadata needed for {\t setup.py}:
+
+<<setup.py config>>=
+setup(name='weft',
+      version='0.1',
+      description='Literate programming',
+      author='Danny McAllaster',
+      author_email='dmcallas@gmail.com',
+      license='Apache-2.0',
+      package_dir={'': 'src'},
+      setup_requires=["pytest-runner",],
+      tests_require=["pytest","pytest-cov",],
+      zip_safe=False,
+      cmdclass={
+          'weft': WeftCommand,
+      },
+)
+@
+
+\subsection{Settings}
+
+<<file:setup.cfg>>=
+[aliases]
+test=pytest
+
+[tool:pytest]
+testpaths = tests
+addopts = --cov src
+          --cov-report term-missing
+	  --cov-branch
+@
+
+\section{Main code}
+
+\subsection{Skeleton of the code}
+
+First, we need to have an {\t __init__.py} file just to ensure the
+code looks like a module:
+
+<<file:src/__init__.py>>=
+@
+
+Now, we define the main file:
+
+<<file:src/main.py>>=
+<<includes>>
+
+
+<<file to string conversions>>
+
+
+<<chunk class>>
+
+
+<<file tangler>>
+
+
+<<main handler>>
+@
+
+
+\subsection{Main parsing/rebuilding}
+
+We'll be doing a fair amount of parsing, so we'll need regular expressions:
+
+<<includes>>=
+import re
+@
+
+and we also need to know the line separator for rebuilding files:
+
+<<includes>>=
+import os
+@
+
+<<chunk class>>=
+class ChunkParser:
+    def __init__(self, text, linesep=os.linesep):
+        self._text = text
+        self._extract_chunks(text)
+        self._nl = linesep
+
+    def _extract_chunks(self, input_text: str):
+        in_chunk = False
+        chunk_name = ""
+        chunk = ""
+        self.chunks = dict()
+        self.deps = dict()
+        matcher = re.compile(r"<<(?P<chunk_name>.*)>>=")
+        include_chunk_matcher = re.compile(r"<<(?P<chunk_name>.*?)>>")
+        for line in input_text.splitlines():
+            if not in_chunk:
+                match = matcher.match(line)
+                if match:
+                    in_chunk = True
+                    chunk_name = match.group("chunk_name")
+                    chunk = []
+                    if chunk_name not in self:
+                        self.deps[chunk_name] = set()
+            else:
+                if line == "@" or line.startswith("@ "):
+                    in_chunk = False
+                    if chunk_name in self:
+                        self.chunks[chunk_name].extend(chunk)
+                    else:
+                        self.chunks[chunk_name] = chunk
+                    chunk = []
+                    chunk_name = ""
+                else:
+                    included_chunks = include_chunk_matcher.findall(line)
+                    self.deps[chunk_name].update(included_chunks)
+                    chunk.append(line)
+
+    def get_chunk_deps(self, chunk: str):
+        return self.deps[chunk]
+
+    def get_chunk_names(self):
+        return self.chunks.keys()
+
+    def __contains__(self, item: str):
+        return item in self.chunks
+
+    def fetch_chunk_lines(self, chunk_name: str):
+        chunk_lines = self.chunks.get(chunk_name, "")
+        processed_lines = []
+        for line in chunk_lines:
+            processed = False
+            for dep in self.get_chunk_deps(chunk_name):
+                # Don't process if it isn't actually a chunk name:
+                dep_str = f"<<{dep}>>"
+                if dep_str in line and dep in self and not processed:
+                    rep_chunk_lines = self.fetch_chunk_lines(dep)
+                    split = line.split(dep_str)
+                    for line in rep_chunk_lines:
+                        processed_lines.append(line.join(split))
+                    processed = True
+            if not processed:
+                processed_lines.append(line)
+        return processed_lines
+
+    def fetch_chunk(self, chunk_name: str):
+        chunk_lines = self.fetch_chunk_lines(chunk_name)
+        return self._nl.join(chunk_lines) + self._nl
+
+    def __getitem__(self, key: str):
+        return self.fetch_chunk(key)
+@
+
+
+\subsection{Utilities}
+
+
+Now because we are only working with strings, we are going to need to
+have a way to read files to strings and vice-versa:
+
+<<file to string conversions>>=
+def file_to_string(file_name):
+    with open(file_name, "r") as f:
+        data = f.read()
+    return data
+
+
+def write_to_file(file_name, content):
+    with open(file_name, "w") as f:
+        f.write(content)
+@
+
+
+\subsection{{\t setup.py} and system integration}
+
+
+Because we will need to read arguments, we'll add the sys import:
+
+<<includes>>=
+import sys
+@
+
+Finally, we put it all together and read in a file, parse it, and
+write out any chunks with the name "file:path/file.name" to the
+filename specified in the chunk name.
+
+<<file tangler>>=
+def tangle_file(file_name):
+    file_str = file_to_string(file_name)
+    chunks = ChunkParser(file_str)
+    for chunk in chunks.get_chunk_names():
+        if chunk.startswith("file:"):
+            write_to_file(chunk[5:], chunks[chunk])
+@
+
+
+<<main handler>>=
+if __name__ == "__main__":
+    tangle_file(sys.argv[1])
+@
